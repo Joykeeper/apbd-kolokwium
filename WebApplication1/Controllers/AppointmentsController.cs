@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using WebApplication1.DTOs;
+using WebApplication1.Services;
 
 namespace WebApplication1.Controllers;
     
@@ -14,19 +16,54 @@ public class AppointmentsController : ControllerBase
         _appointmentsService = service;
     }
     
-    [HttpGet("{id}/trips")]
-    public async Task<IActionResult> GetClientTrips([FromRoute] int id)
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetAppointmentById([FromRoute] int id)
     {   
-        var clientExists = await _clientsService.ClientExists(id);
+        var clientExists = await _appointmentsService.IsAppointmentExists(id);
 
-        if (!clientExists) return NotFound("Client not found");
+        if (!clientExists) return NotFound("Appointment not found");
         
         
-        var trips = await _clientsService.GetClientTripsWithDetails(id);
+        var appointment = await _appointmentsService.GetAppointmentById(id);
+        
+        appointment.appointmentServices = await _appointmentsService.GetServicesByAppointmentsId(id);
+        
+        return Ok(appointment);
+    }
+    
+    [HttpPost]
+    public async Task<IActionResult> AddVisit([FromBody] Object v)
+    {
+
+        VisitDTO visit;
+        try
+        {
+            visit = v as VisitDTO;
+        }
+        catch (Exception e)
+        {
+            return BadRequest("Wrong data format");
+        }
+        
+        var appointmentExists = await _appointmentsService.IsAppointmentExists(visit.AppointmentId);
+
+        if (!appointmentExists) return Conflict("Appointment already exists");
+        
+        var patientExists = await _appointmentsService.IsPatientExists(visit.PatientId);
+        if (!patientExists) return NotFound("Patient not exists");
+        
+        var doctorExists = await _appointmentsService.IsDoctorExists(visit.Pwz);
+        if (!doctorExists) return NotFound("Doctor not exists");
         
         
-        if (trips.Count == 0) return NotFound("Client has not been registered to any of the trips");
+        var status = await _appointmentsService.AddVisit(visit);
         
-        return Ok(trips);
+        
+        if (status == 0)
+            return Ok();
+        else
+        {
+            return StatusCode(500, "Server Error");
+        }
     }
 }
